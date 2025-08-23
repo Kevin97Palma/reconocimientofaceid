@@ -1,16 +1,17 @@
 import { Module } from '@nestjs/common';
 import { ImagenvalService } from './imagenval.service';
 import { ImagenvalController } from './imagenval.controller';
+import { TokenidService } from '../tokenid/tokenid.service';
 import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   imports: [
     JwtModule.register({
-      secret: 'SECRET_KEY', // la misma clave usada en TokenidService
+      secret: 'Palma123', // 🔹 misma clave que en TokenidService
       signOptions: { expiresIn: '1h' },
     }),
   ],
   controllers: [ImagenvalController],
-  providers: [ImagenvalService],
+  providers: [ImagenvalService, TokenidService],
 })
 export class ImagenvalModule {}

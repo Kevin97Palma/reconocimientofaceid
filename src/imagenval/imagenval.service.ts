@@ -4,26 +4,28 @@ import { Express } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
-import FormData from 'form-data'; // ✅ Importación por defecto
+import FormData from 'form-data';
 
 @Injectable()
 export class ImagenvalService {
-  private comprefaceUrl = 'http://localhost:8000'; // URL de CompreFace
+  private comprefaceUrl = 'http://192.168.100.10:8000'; // URL de CompreFace
   private comprefaceApiKey = '58f8b1cc-acb8-4a6c-bbae-5145bb4fd2b6'; // token ValidacionBe
 
   constructor(private readonly jwtService: JwtService) {}
 
+  // Validar token JWT usando JwtService
   validateToken(token: string) {
     try {
-      return this.jwtService.verify(token);
+      return this.jwtService.verify(token, { secret: 'Palma123' }); // misma clave usada al registrar JwtModule
     } catch (error) {
       throw new UnauthorizedException('Token inválido');
     }
   }
 
+  //  Validar tipo y tamaño de imagen
   validateImage(file: Express.Multer.File) {
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-    const maxSize = 5242880; // 5MB
+    const maxSize = 5 * 1024 * 1024; // 5MB
 
     if (!file) throw new BadRequestException('Archivo no enviado');
     if (!allowedTypes.includes(file.mimetype)) {
@@ -36,6 +38,7 @@ export class ImagenvalService {
     return true;
   }
 
+  // ✅ Validar dos imágenes y enviar a CompreFace
   async validateTwoImages(files: Express.Multer.File[], token: string) {
     this.validateToken(token);
 
@@ -56,29 +59,36 @@ export class ImagenvalService {
     fs.writeFileSync(selfiePath, files[1].buffer);
 
     // Verificación en CompreFace
-    const result = await this.verifyWithCompreFace(cedulaPath, selfiePath);
-
-    return result;
+    return await this.verifyWithCompreFace(cedulaPath, selfiePath);
   }
 
+  // ✅ Enviar imágenes a CompreFace
   private async verifyWithCompreFace(cedulaPath: string, selfiePath: string) {
     try {
       const form = new FormData();
-      form.append('image1', fs.createReadStream(cedulaPath));
-      form.append('image2', fs.createReadStream(selfiePath));
+      form.append('source_image', fs.createReadStream(selfiePath));
+      form.append('target_image', fs.createReadStream(cedulaPath));
 
       const response = await axios.post(
-        `${this.comprefaceUrl}/api/v1/verify?face_api_key=${this.comprefaceApiKey}`,
+        `${this.comprefaceUrl}/api/v1/verification/verify`,
         form,
-        { headers: form.getHeaders() },
+        {
+          headers: {
+            ...form.getHeaders(),
+            'x-api-key': this.comprefaceApiKey,
+          },
+        },
       );
 
       const data = response.data;
 
       return {
-        match: data.match,
-        confidence: data.confidence,
-        message: data.match ? 'Las imágenes coinciden' : 'Las imágenes no coinciden',
+        match: data.result?.[0]?.face_matches?.[0]?.similarity >= 0.8, // por ejemplo
+        confidence: data.result?.[0]?.face_matches?.[0]?.similarity,
+        message:
+          data.result?.[0]?.face_matches?.[0]?.similarity >= 0.8
+            ? 'Las imágenes coinciden'
+            : 'Las imágenes no coinciden',
       };
     } catch (error) {
       console.error(error.response?.data || error.message);
