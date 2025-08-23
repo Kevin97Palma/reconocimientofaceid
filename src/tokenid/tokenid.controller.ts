@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
 import { TokenidService } from './tokenid.service';
 import { CreateTokenidDto } from './dto/create-tokenid.dto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -8,14 +8,20 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 export class TokenidController {
   constructor(private readonly tokenService: TokenidService) {}
 
-  @Post('login')
-  @ApiOperation({ summary: 'Generar token JWT con usuario y clave' })
-  @ApiResponse({ status: 201, description: 'Token generado correctamente.' })
-  @ApiResponse({ status: 401, description: 'Usuario o contraseña incorrectos.' })
-  login(@Body() createTokenidDto: CreateTokenidDto) {
-    const { username, password } = createTokenidDto;
-    this.tokenService.validateUser(username, password);
+  @Post('create')
+  @ApiOperation({ summary: 'Generar token JWT a partir de usuario y contraseña' })
+  @ApiResponse({ status: 201, description: 'Token generado exitosamente' })
+  @ApiResponse({ status: 401, description: 'Usuario o contraseña incorrectos' })
+  async createToken(@Body() dto: CreateTokenidDto) {
+    const { username, password } = dto;
+
+    // Validar usuario y contraseña
+    const valid = this.tokenService.validateUser(username, password);
+    if (!valid) throw new UnauthorizedException('Usuario o contraseña incorrectos');
+
+    // Generar token usando el secreto configurado en JwtModule
     const token = this.tokenService.generateToken(username);
+
     return { token };
   }
 }

@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common';
 import { TokenidService } from './tokenid.service';
+import { TokenidController } from './tokenid.controller';
 import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   imports: [
     JwtModule.register({
-      secret: 'Palma123', // <- aquí defines la clave secreta
+      secret: 'Palma123',
       signOptions: { expiresIn: '1h' },
     }),
   ],
   providers: [TokenidService],
-  exports: [TokenidService], // <-- exporta para otros módulos
+  controllers: [TokenidController],
+  exports: [TokenidService],
 })
 export class TokenidModule {}
