@@ -1,8 +1,22 @@
-import { Controller, Post, UploadedFiles, UseInterceptors, Body, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UploadedFiles,
+  UseInterceptors,
+  Body,
+  BadRequestException,
+} from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ImagenvalService } from './imagenval.service';
 import { CreateImagenvalDto } from './dto/create-imagenval.dto';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { Express } from 'express';
 
 @ApiTags('imagenval')
@@ -34,7 +48,10 @@ export class ImagenvalController {
       { name: 'fotoselfie', maxCount: 1 },
     ]),
   )
-  upload(@UploadedFiles() files: { [key: string]: Express.Multer.File[] }, @Body() body: CreateImagenvalDto) {
+  async upload(
+    @UploadedFiles() files: { [key: string]: Express.Multer.File[] },
+    @Body() body: CreateImagenvalDto,
+  ) {
     const fotocedulaFile = files.fotocedula?.[0];
     const fotoselfieFile = files.fotoselfie?.[0];
 
@@ -42,6 +59,9 @@ export class ImagenvalController {
       throw new BadRequestException('Se deben enviar ambas imágenes: fotocedula y fotoselfie');
     }
 
-    return this.imagenService.validateTwoImages([fotocedulaFile, fotoselfieFile], body.token);
+    return await this.imagenService.validateTwoImages(
+      [fotocedulaFile, fotoselfieFile],
+      body.token,
+    );
   }
 }
