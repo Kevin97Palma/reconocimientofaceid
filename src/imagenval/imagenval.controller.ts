@@ -32,28 +32,35 @@ export class ImagenvalController {
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'Imágenes válidas para reconocimiento' })
+  @ApiResponse({ status: 201, description: 'Imágenes válidas para reconocimiento', schema: {
+      type: 'object',
+      properties: {
+        match: { type: 'boolean', example: true },
+        similarity: { type: 'number', example: 0.98 },
+        message: { type: 'string', example: 'Las imágenes coinciden' }
+      }
+  }})
   @ApiResponse({ status: 400, description: 'Formato o tamaño de imagen no permitido' })
   @ApiResponse({ status: 401, description: 'Token inválido' })
   @UseInterceptors(AnyFilesInterceptor())
   async upload(@UploadedFiles() files: Express.Multer.File[], @Body() body: CreateImagenvalDto) {
 
-    // 1️⃣ Validar token JWT
+    // Validar token JWT
     try {
       this.tokenService.validateToken(body.token);
     } catch (error) {
       throw new UnauthorizedException('Token inválido');
     }
 
-    // 2️⃣ Validar que existan ambas imágenes
+    //  Validar que existan ambas imágenes
     if (!files || files.length !== 2) {
       throw new BadRequestException('Se deben enviar dos imágenes: fotocedula y fotoselfie');
     }
 
-    // 3️⃣ Validar tipo y tamaño de archivos
+    //  Validar tipo y tamaño de archivos
     files.forEach(file => this.imagenService.validateImage(file));
 
-    // 4️⃣ Guardar temporalmente
+    // Guardar temporalmente
     const uploadsDir = path.join(__dirname, '..', 'uploads');
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
     const cedulaPath = path.join(uploadsDir, 'fotocedula.jpg');
@@ -61,18 +68,28 @@ export class ImagenvalController {
     fs.writeFileSync(cedulaPath, files[0].buffer);
     fs.writeFileSync(selfiePath, files[1].buffer);
 
-    // 5️⃣ Convertir a Base64
+    // Convertir a Base64
     const sourceImageBase64 = fs.readFileSync(selfiePath, { encoding: 'base64' });
     const targetImageBase64 = fs.readFileSync(cedulaPath, { encoding: 'base64' });
 
-    // 6️⃣ Enviar a CompreFace
+    // Enviar a CompreFace y transformar la respuesta
     try {
       const response = await axios.post(
         'http://192.168.100.10:8000/api/v1/verification/verify',
         { source_image: sourceImageBase64, target_image: targetImageBase64 },
         { headers: { 'Content-Type': 'application/json', 'x-api-key': '58f8b1cc-acb8-4a6c-bbae-5145bb4fd2b6' } }
       );
-      return response.data;
+
+      // Transformar para que coincida con la documentación
+      const faceMatch = response.data.result[0]?.face_matches[0];
+      const similarity = faceMatch?.similarity || 0;
+      const match = similarity >= 0.8; // ejemplo de umbral
+      return {
+        match,
+        similarity,
+        message: match ? 'Las imágenes coinciden' : 'Las imágenes no coinciden',
+      };
+
     } catch (error) {
       throw new BadRequestException('Error en la verificación de rostro: ' + error.message);
     }
