@@ -85,9 +85,13 @@ export class ImagenvalController {
       const similarity = faceMatch?.similarity || 0;
       const match = similarity >= 0.8; // ejemplo de umbral
       return {
-        match,
-        similarity,
-        message: match ? 'Las imágenes coinciden' : 'Las imágenes no coinciden',
+         match,
+  similarity,
+  message: match ? 'Las imágenes coinciden' : 'Las imágenes no coinciden',
+  sourceFaceBox: response.data.result[0]?.source_image_face?.box,
+  sourceFaceProbability: response.data.result[0]?.source_image_face?.probability,
+  targetFaceBox: faceMatch?.box,
+  targetFaceProbability: faceMatch?.probability,
       };
 
     } catch (error) {
