@@ -23,6 +23,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
+const { v4: uuidv4 } = require('uuid');
 
 @ApiTags('imagenval')
 @Controller('imagenval')
@@ -92,8 +93,12 @@ export class ImagenvalController {
     // 💾 Guardar temporalmente
     const uploadsDir = path.join(__dirname, '..', 'uploads');
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-    const cedulaPath = path.join(uploadsDir, 'fotocedula.jpg');
-    const selfiePath = path.join(uploadsDir, 'fotoselfie.jpg');
+    const cedulaFilename = `fotocedula_${uuidv4()}.jpg`;
+    const selfieFilename = `fotoselfie_${uuidv4()}.jpg`;
+
+    const cedulaPath = path.join(uploadsDir, cedulaFilename);
+    const selfiePath = path.join(uploadsDir, selfieFilename);
+
     fs.writeFileSync(cedulaPath, cedulaFile.buffer);
     fs.writeFileSync(selfiePath, selfieFile.buffer);
 
@@ -101,12 +106,12 @@ export class ImagenvalController {
     const sourceImageBase64 = fs.readFileSync(selfiePath, { encoding: 'base64' });
     const targetImageBase64 = fs.readFileSync(cedulaPath, { encoding: 'base64' });
 
+    fs.unlinkSync(cedulaPath);
+    fs.unlinkSync(selfiePath);
+
     // 🌍 Obtener la URL y la KEY desde variables de entorno
     const compareFaceApiUrl = this.configService.get<string>('COMPAREFACE_API_URL');
     const comparefaceApiKey = this.configService.get<string>('COMPAREFACE_API_KEY');
-
-    console.log({compareFaceApiUrl, comparefaceApiKey});
-    
 
     if (!compareFaceApiUrl || !comparefaceApiKey) {
       throw new BadRequestException('Faltan variables de entorno para la API de CompareFace');
