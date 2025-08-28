@@ -1,45 +1,36 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config'; 
-import { AppController } from 'src/app.controller';
-import { AppService } from 'src/app.service';
-import { ImagenvalModule } from './imagenval.module';
-import { TokenidModule } from 'src/tokenid/tokenid.module';
-
-@Module({
-  // Esto carga el archivo .env automáticamente
-  imports: [
-    ConfigModule.forRoot(), 
-    ImagenvalModule,
-    TokenidModule,
-  ],
-  controllers: [AppController],
-  providers: [AppService],
-})
-export class AppModule {}
-
-// Inyectamos el servicio de configuración para acceder a las variables de entorno.
-import { 
-  Controller, Post, UploadedFiles, UseInterceptors, Body, BadRequestException, UnauthorizedException 
+import {
+  Controller,
+  Post,
+  UploadedFiles,
+  UseInterceptors,
+  Body,
+  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ImagenvalService } from './imagenval.service';
 import { CreateImagenvalDto } from './dto/create-imagenval.dto';
 import { TokenidService } from '../tokenid/tokenid.service';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+  ApiResponse,
+} from '@nestjs/swagger';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
-// Importamos ConfigService
-import { ConfigService } from '@nestjs/config'; 
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('imagenval')
 @Controller('imagenval')
 export class ImagenvalController {
-  // Inyectamos el servicio de configuración en el constructor
   constructor(
     private readonly imagenService: ImagenvalService,
     private readonly tokenService: TokenidService,
-    private readonly configService: ConfigService, // Inyección del servicio
+    private readonly configService: ConfigService,
   ) {}
 
   @Post('upload')
@@ -56,62 +47,84 @@ export class ImagenvalController {
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'Imágenes válidas para reconocimiento', schema: {
+  @ApiResponse({
+    status: 201,
+    description: 'Imágenes válidas para reconocimiento',
+    schema: {
       type: 'object',
       properties: {
         match: { type: 'boolean', example: true },
         similarity: { type: 'number', example: 0.98 },
-        message: { type: 'string', example: 'Las imágenes coinciden' }
-      }
-  }})
+        message: { type: 'string', example: 'Las imágenes coinciden' },
+      },
+    },
+  })
   @ApiResponse({ status: 400, description: 'Formato o tamaño de imagen no permitido' })
   @ApiResponse({ status: 401, description: 'Token inválido' })
-  @UseInterceptors(AnyFilesInterceptor())
-  async upload(@UploadedFiles() files: Express.Multer.File[], @Body() body: CreateImagenvalDto) {
-    // Validar token JWT
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'fotocedula', maxCount: 1 },
+      { name: 'fotoselfie', maxCount: 1 },
+    ]),
+  )
+  async upload(
+    @UploadedFiles()
+    files: { fotocedula?: Express.Multer.File[]; fotoselfie?: Express.Multer.File[] },
+    @Body('token') token: string,
+  ) {    
     try {
-      this.tokenService.validateToken(body.token);
+      this.tokenService.validateToken(token);
     } catch (error) {
       throw new UnauthorizedException('Token inválido');
     }
 
-    // Validar que existan ambas imágenes
-    if (!files || files.length !== 2) {
-      throw new BadRequestException('Se deben enviar dos imágenes: fotocedula y fotoselfie');
+    // 📷 Validar que existan ambas imágenes
+    const cedulaFile = files.fotocedula?.[0];
+    const selfieFile = files.fotoselfie?.[0];
+    if (!cedulaFile || !selfieFile) {
+      throw new BadRequestException('Debes enviar fotocedula y fotoselfie');
     }
 
-    // Validar tipo y tamaño de archivos
-    files.forEach(file => this.imagenService.validateImage(file));
+    // 📏 Validar tipo y tamaño de archivos
+    this.imagenService.validateImage(cedulaFile);
+    this.imagenService.validateImage(selfieFile);
 
-    // Guardar temporalmente
+    // 💾 Guardar temporalmente
     const uploadsDir = path.join(__dirname, '..', 'uploads');
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
     const cedulaPath = path.join(uploadsDir, 'fotocedula.jpg');
     const selfiePath = path.join(uploadsDir, 'fotoselfie.jpg');
-    fs.writeFileSync(cedulaPath, files[0].buffer);
-    fs.writeFileSync(selfiePath, files[1].buffer);
+    fs.writeFileSync(cedulaPath, cedulaFile.buffer);
+    fs.writeFileSync(selfiePath, selfieFile.buffer);
 
-    // Convertir a Base64
+    // 🔄 Convertir a Base64
     const sourceImageBase64 = fs.readFileSync(selfiePath, { encoding: 'base64' });
     const targetImageBase64 = fs.readFileSync(cedulaPath, { encoding: 'base64' });
 
-    // Obtener la URL desde la variable de entorno
+    // 🌍 Obtener la URL y la KEY desde variables de entorno
     const compareFaceApiUrl = this.configService.get<string>('COMPAREFACE_API_URL');
-    const comparefaceSecretKey = this.configService.get<string>('COMPAREFACE_SECRET_KEY');
+    const comparefaceApiKey = this.configService.get<string>('COMPAREFACE_API_KEY');
 
-    // Enviar a compareFace y transformar la respuesta
+    console.log({compareFaceApiUrl, comparefaceApiKey});
+    
+
+    if (!compareFaceApiUrl || !comparefaceApiKey) {
+      throw new BadRequestException('Faltan variables de entorno para la API de CompareFace');
+    }
+
+    // 📡 Llamar a la API externa
     try {
-      // Usamos la variable de entorno definida antes    
       const response = await axios.post(
-        `${compareFaceApiUrl}/api/v1/verification/verify`, 
+        `${compareFaceApiUrl}/api/v1/verification/verify`,
         { source_image: sourceImageBase64, target_image: targetImageBase64 },
-        { headers: { 'Content-Type': 'application/json', 'x-api-key': comparefaceSecretKey } }
+        { headers: { 'Content-Type': 'application/json', 'x-api-key': comparefaceApiKey } },
       );
 
-      // Transformar para que coincida con la documentación
+      // 📝 Transformar respuesta
       const faceMatch = response.data.result[0]?.face_matches[0];
       const similarity = faceMatch?.similarity || 0;
-      const match = similarity >= 0.8; // ejemplo de umbral
+      const match = similarity >= 0.8;
+
       return {
         match,
         similarity,
@@ -121,10 +134,10 @@ export class ImagenvalController {
         targetFaceBox: faceMatch?.box,
         targetFaceProbability: faceMatch?.probability,
       };
-
     } catch (error) {
-      throw new BadRequestException('Error en la verificación de rostro: ' + error.message);
+      // Mostrar mensaje real de la API si lo devuelve
+      const apiMsg = error.response?.data || error.message;
+      throw new BadRequestException('Error en la verificación de rostro: ' + JSON.stringify(apiMsg));
     }
   }
 }
-

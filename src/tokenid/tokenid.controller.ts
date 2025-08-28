@@ -13,6 +13,8 @@ export class TokenidController {
   @ApiResponse({ status: 201, description: 'Token generado exitosamente' })
   @ApiResponse({ status: 401, description: 'Usuario o contraseña incorrectos' })
   async createToken(@Body() dto: CreateTokenidDto) {
+    console.table(dto);
+    
     const { username, password } = dto;
 
     // Validar usuario y contraseña
