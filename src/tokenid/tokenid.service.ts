@@ -1,12 +1,20 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class TokenidService {
-  constructor(private readonly jwtService: JwtService) {}
+  
+  private comparefaceAppUser: string;
+  private comparefaceAppPass: string;
+
+  constructor(private readonly jwtService: JwtService, private readonly configService: ConfigService) {
+    this.comparefaceAppUser = this.configService.get<string>('COMPAREFACE_USER_API') || '';
+    this.comparefaceAppPass = this.configService.get<string>('COMPAREFACE_PASS_API') || '';
+  }
 
   validateUser(username: string, password: string) {
-    if (username === 'admin' && password === '1234') {
+    if (username === this.comparefaceAppUser && password === this.comparefaceAppPass) {
       return true;
     }
     throw new UnauthorizedException('Usuario o contraseña incorrectos');
