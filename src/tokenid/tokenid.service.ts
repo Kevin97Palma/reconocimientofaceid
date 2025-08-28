@@ -14,8 +14,7 @@ export class TokenidService {
   }
 
   validateUser(username: string, password: string) {
-    console.log("validateUser: ", this.comparefaceAppUser, this.comparefaceAppPass);
-    
+
     if (username === this.comparefaceAppUser && password === this.comparefaceAppPass) {
       return true;
     }

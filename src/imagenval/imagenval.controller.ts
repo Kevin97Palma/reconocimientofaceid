@@ -24,6 +24,8 @@ import * as path from 'path';
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
 const { v4: uuidv4 } = require('uuid');
+import { ApiLogModel } from 'src/database/models/api-log.model/api-log.model';
+import { InjectModel } from '@nestjs/sequelize';
 
 @ApiTags('imagenval')
 @Controller('imagenval')
@@ -32,7 +34,18 @@ export class ImagenvalController {
     private readonly imagenService: ImagenvalService,
     private readonly tokenService: TokenidService,
     private readonly configService: ConfigService,
+    @InjectModel(ApiLogModel) private apiLogModel: typeof ApiLogModel
   ) {}
+
+  async saveApiLog(solicitud: any, respuesta: any, mensaje: string) {
+    const fecha = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    await this.apiLogModel.create({
+      solicitud_payload: solicitud,
+      respuesta_payload: respuesta,
+      mensaje_api: mensaje,
+      fecha_registro: fecha,
+    });
+  }
 
   @Post('upload')
   @ApiOperation({ summary: 'Subir dos imágenes y validar con token JWT' })
@@ -130,7 +143,7 @@ export class ImagenvalController {
       const similarity = faceMatch?.similarity || 0;
       const match = similarity >= 0.8;
 
-      return {
+      const apiResponse = {
         match,
         similarity,
         message: match ? 'Las imágenes coinciden' : 'Las imágenes no coinciden',
@@ -139,9 +152,25 @@ export class ImagenvalController {
         targetFaceBox: faceMatch?.box,
         targetFaceProbability: faceMatch?.probability,
       };
-    } catch (error) {
+
+      // Guardar log
+      await this.saveApiLog(
+        { source_image: sourceImageBase64, target_image: targetImageBase64 },
+        apiResponse,
+        apiResponse.message,
+      );
+
+      return apiResponse;
+    } catch (error) {      
       // Mostrar mensaje real de la API si lo devuelve
       const apiMsg = error.response?.data || error.message;
+      
+      // Guardar log
+      await this.saveApiLog(
+        { source_image: sourceImageBase64, target_image: targetImageBase64 },
+        error.response?.data || error,
+        apiMsg.message,
+      );
       throw new BadRequestException('Error en la verificación de rostro: ' + JSON.stringify(apiMsg));
     }
   }
