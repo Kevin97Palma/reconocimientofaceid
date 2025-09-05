@@ -119,9 +119,6 @@ export class ImagenvalController {
     const sourceImageBase64 = fs.readFileSync(selfiePath, { encoding: 'base64' });
     const targetImageBase64 = fs.readFileSync(cedulaPath, { encoding: 'base64' });
 
-    fs.unlinkSync(cedulaPath);
-    fs.unlinkSync(selfiePath);
-
     // 🌍 Obtener la URL y la KEY desde variables de entorno
     const compareFaceApiUrl = this.configService.get<string>('COMPAREFACE_API_URL');
     const comparefaceApiKey = this.configService.get<string>('COMPAREFACE_API_KEY');
@@ -155,7 +152,7 @@ export class ImagenvalController {
 
       // Guardar log
       await this.saveApiLog(
-        { source_image: sourceImageBase64, target_image: targetImageBase64 },
+        { source_image: cedulaFilename, target_image: selfieFilename },
         apiResponse,
         apiResponse.message,
       );
@@ -167,7 +164,7 @@ export class ImagenvalController {
       
       // Guardar log
       await this.saveApiLog(
-        { source_image: sourceImageBase64, target_image: targetImageBase64 },
+        { source_image: cedulaFilename, target_image: selfieFilename },
         error.response?.data || error,
         apiMsg.message,
       );
